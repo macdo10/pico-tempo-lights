@@ -35,47 +35,56 @@ def Before (s, want) : return s[:s.find(want)]
 gc.enable()
 
 #Connecting to wifi
-allOn() #Proof of life while we're connecting
+try:
+    allOn() #Proof of life while we're connecting
 
 
 
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-wlan.connect(ssid, password)
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect(ssid, password)
 
-# Wait for connect or fail
-max_wait = 15
-while max_wait > 0:
-  if wlan.status() < 0 or wlan.status() >= 3:
-    break
-  max_wait -= 1
-  print('waiting for connection...')
-  time.sleep_ms(500)
+    # Wait for connect or fail
+    max_wait = 15
+    while max_wait > 0:
+      if wlan.status() < 0 or wlan.status() >= 3:
+        break
+      max_wait -= 1
+      print('waiting for connection...')
+      time.sleep_ms(500)
 
-             
-# Handle connection error: one purple, one orange means we can't connect.
-if wlan.status() != 3:
-    allOff()
-    rgbTdy.color = (125, 100, 0)
-    rgbTmw.color = (125, 0, 125)
-    raise RuntimeError('network connection failed')
+                 
+    # Handle connection error: one purple, one orange means we can't connect.
+
+    if wlan.status() != 3:
+        allOff()
+        rgbTdy.color = (125, 100, 0)
+        rgbTmw.color = (125, 0, 125)
+        raise RuntimeError('network connection failed')
 
 
 
 
-else:
-    #two greens: we're all set
-    rgbTdy.color = (0, 100, 0)
-    rgbTmw.color = (0, 100, 0)    
-    print("* * * * * * * * * * * *")
-    print('* connected           *')
-    status = wlan.ifconfig()
-    ipLength = len(status[0])
-#This just gives the box more chance of being aligned - there's probs a better way to do this
-    if ipLength == 12:
-        print( '* ip = ' + status[0] +"   *" )
     else:
-        print( '* ip = ' + status[0] +" *" )
+        #two greens: we're all set
+        rgbTdy.color = (0, 100, 0)
+        rgbTmw.color = (0, 100, 0)    
+        print("* * * * * * * * * * * *")
+        print('* connected           *')
+        status = wlan.ifconfig()
+        ipLength = len(status[0])
+    #This just gives the box more chance of being aligned - there's probs a better way to do this
+        if ipLength == 12:
+            print( '* ip = ' + status[0] +"   *" )
+        else:
+            print( '* ip = ' + status[0] +" *" )
+except:
+    
+    print('rebooting in 30 secs')
+    time.sleep(30)
+    print('rebooting now!')
+    time.sleep(1)
+    machine.reset()
     
 #Set time from NTP
 ntptime.timeout = 2
@@ -99,16 +108,20 @@ while True:
             
         if (auth == 1):            
     #Tomorrow first. We don't need to faf around : this is the default query for RTE's API
-
+            print('\nTOMORROW\n')
             try:
                 url = "https://digital.iservices.rte-france.com/open_api/tempo_like_supply_contract/v1/tempo_like_calendars"
                 headers = {"Authorization": "Bearer {}".format(oauth2["access_token"])}
                 print(url, headers)
                 r = urequests.get(url, headers=headers)
-                s = r.text #we need this for the fallback if JSON version is not available
+                s = r.text
+                print('going to parse json...')
 
                 rteReturn = r.json()
                 r.close()
+                print("JSON")
+     
+                print(rteReturn)
                 rteValues = rteReturn["tempo_like_calendars"]["values"]
                 tmwDate = rteValues[0]["start_date"] #to work out when it changes
                 tmwColor = rteValues[0]["value"]
@@ -118,16 +131,19 @@ while True:
 
             except:
                 try:
-    #rte API has a fallback to XML - in French (BLEU - blue, BLANC - white, ROUGE - red). Example format :
+    #rte API has a fallback to XML - in French (BLEU, BLANC, ROUGE). Example format :
     #<Tempo><DateHeureCreation>2023-05-28</DateHeureCreation><DateApplication>2023-05-29</DateApplication><Couleur>BLEU</Couleur></Tempo>
     #So we'll try that before giving up...
 
+                    print('JSON was not available, trying XML...')
                     t = After  (s, "<Couleur>")
                     t = Before (t, "</Couleur>")
                     frenchTmwColor = t
                     u = After  (s, "<DateApplication>")
                     u = Before (u, "</DateApplication>")
                     tmwDate = u
+                    print("Tomorrow is {}, color is {}".format(tmwDate, frenchTmwColor))
+
                     if frenchTmwColor == 'BLEU':
                         tmwColor = 'BLUE'
                     elif frenchTmwColor == 'BLANC':
@@ -157,11 +173,15 @@ while True:
                 dateTmw = ("%d-%02d-%02dT00:00:00+02:00" %(tTmw[0], tTmw[1], tTmw[2]))
                 url = ("https://digital.iservices.rte-france.com/open_api/tempo_like_supply_contract/v1/tempo_like_calendars?start_date={}&end_date={}".format(dateYdy, dateTmw))
                 headers = {"Authorization": "Bearer {}".format(oauth2["access_token"])}
+                print(url, headers)
                 r = urequests.get(url, headers=headers)
                 s=r.text #We need this for the fallback option
+                print('going to parse json...')
+
                 rteReturnTdy = r.json()
                 s=r.text
                 r.close()
+                print(s)
                 rteValuesTdy = rteReturnTdy["tempo_like_calendars"]["values"]
                 t = time.localtime()
                 tdyDate = rteValuesTdy[0]["start_date"] #to work out when it changes
@@ -178,6 +198,7 @@ while True:
                     u = After  (s, "<DateApplication>")
                     u = Before (u, "</DateApplication>")
                     tdyDate = u
+                    print("Today is {}, color is {}".format(tdyDate, frenchTdyColor))
 
                     if frenchTdyColor == 'BLEU':
                         tdyColor = 'BLUE'
@@ -258,6 +279,10 @@ while True:
         print("Date: %02d/%02d/%d" %(t[2],t[1],t[0]))
         print("Time: %02d:%02d:%02d" %(t[3],t[4],t[5]))     
         allOn() #it's all messed up and both lights cycle through RGB until next time.
+        print('I\'ll try again in 15 minutes')
+        time.sleep(960)
+        machine.reset()
 
     gc.collect()
     time.sleep(960)
+
