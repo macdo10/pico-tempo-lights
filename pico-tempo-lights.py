@@ -11,7 +11,7 @@ import gc #garbage collector
 ### your data
 ssid = 'your ssid here'
 password = 'your wifi password here'
-apiAuth = 'Basic your base 64 secret here - but leave the Basic at the start'
+apiAuth = 'Basic your base 64 secret here - but leave the Basic at the start' #Get this from https://data.rte-france.com/catalog/-/api/consumption/Tempo-Like-Supply-Contract/v1.1
 
 #### set up pins
 rgbTdy = RGBLED(red = 13, green = 14, blue = 15)
